@@ -82,8 +82,10 @@ void V_times_L__V_times_P1_times_Vt(const mayo_params_t* p, const uint64_t* L, c
     (void) p;
 #if MAYO_AVX && defined(MAYO_VARIANT) && M_MAX == 64
     __m256i V_multabs[(K_MAX+1)/2*V_MAX];
+    uint8_t test[128] = {0};
     alignas (32) uint64_t Pv[N_MINUS_O_MAX * K_MAX * M_MAX / 16] = {0};
     mayo_V_multabs_avx2(V, V_multabs);
+    mayo_12_Vt_times_L_avx2_v2(L, V, (uint64_t *)test);
     mayo_12_Vt_times_L_avx2(L, V_multabs, M);
     mayo_12_P1_times_Vt_avx2(P1, V_multabs, Pv);
     mayo_12_Vt_times_Pv_avx2(Pv, V_multabs, Y);

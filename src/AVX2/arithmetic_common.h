@@ -79,6 +79,56 @@ inline void mayo_V_multabs_avx2(const unsigned char *V, __m256i *V_multabs){
     }
 }
 
+/// full multiplication
+/// note: assumes that in every byte the two nibbles are the same in b
+/// \return a*b \in \f_16 for all 64 nibbles in the
+static inline __m256i mul_simd_u256(const __m256i a, const __m256i b) {
+    const __m256i mask_lvl2 = _mm256_load_si256((__m256i const *) (__gf16_mulbase +   32));
+    const __m256i mask_lvl3 = _mm256_load_si256((__m256i const *) (__gf16_mulbase + 32*2));
+    const __m256i mask_lvl4 = _mm256_load_si256((__m256i const *) (__gf16_mulbase + 32*3));
+    const __m256i zero = _mm256_setzero_si256();
+
+    __m256i low_lookup = b;
+    __m256i high_lookup = _mm256_slli_epi16(low_lookup, 4);
+    __m256i tmp1l = _mm256_slli_epi16(a, 7);
+    __m256i tmp2h = _mm256_slli_epi16(a, 3);
+    __m256i tmp_mul_0_1 = _mm256_blendv_epi8(zero, low_lookup , tmp1l);
+    __m256i tmp_mul_0_2 = _mm256_blendv_epi8(zero, high_lookup, tmp2h);
+    __m256i tmp = _mm256_xor_si256(tmp_mul_0_1, tmp_mul_0_2);
+    __m256i tmp1;
+
+    /// 1
+    low_lookup = _mm256_shuffle_epi8(mask_lvl2, b);
+    high_lookup = _mm256_slli_epi16(low_lookup, 4);
+    tmp1l = _mm256_slli_epi16(a, 6);
+    tmp2h = _mm256_slli_epi16(a, 2);
+    tmp_mul_0_1 = _mm256_blendv_epi8(zero, low_lookup , tmp1l);
+    tmp_mul_0_2 = _mm256_blendv_epi8(zero, high_lookup, tmp2h);
+    tmp1 = _mm256_xor_si256(tmp_mul_0_1, tmp_mul_0_2);
+    tmp  = _mm256_xor_si256(tmp, tmp1);
+
+    /// 2
+    low_lookup = _mm256_shuffle_epi8(mask_lvl3, b);
+    high_lookup = _mm256_slli_epi16(low_lookup, 4);
+    tmp1l = _mm256_slli_epi16(a, 5);
+    tmp2h = _mm256_slli_epi16(a, 1);
+    tmp_mul_0_1 = _mm256_blendv_epi8(zero, low_lookup , tmp1l);
+    tmp_mul_0_2 = _mm256_blendv_epi8(zero, high_lookup, tmp2h);
+    tmp1 = _mm256_xor_si256(tmp_mul_0_1, tmp_mul_0_2);
+    tmp  = _mm256_xor_si256(tmp, tmp1);
+
+    /// 3
+    low_lookup = _mm256_shuffle_epi8(mask_lvl4, b);
+    high_lookup = _mm256_slli_epi16(low_lookup, 4);
+    tmp1l = _mm256_slli_epi16(a, 4);
+    tmp_mul_0_1 = _mm256_blendv_epi8(zero, low_lookup , tmp1l);
+    tmp_mul_0_2 = _mm256_blendv_epi8(zero, high_lookup, a );
+    tmp1 = _mm256_xor_si256(tmp_mul_0_1, tmp_mul_0_2);
+    tmp  = _mm256_xor_si256(tmp, tmp1);
+    return tmp;
+}
+
+
 static const unsigned char mayo_gf16_mul[512] __attribute__((aligned(32))) = {
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,

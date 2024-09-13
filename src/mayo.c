@@ -17,9 +17,31 @@
 #define MAYO_MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define PK_PRF AES_128_CTR
 
+// TODO remove
+#include <immintrin.h>
 static void decode(const unsigned char *m, unsigned char *mdec, int mdeclen) {
-    int i;
-    for (i = 0; i < mdeclen / 2; ++i) {
+    int i=0;
+
+    // NOTE: made it slower
+    // clang does this already: https://godbolt.org/#g:!((g:!((g:!((h:codeEditor,i:(filename:'1',fontScale:14,fontUsePx:'0',j:1,lang:___c,selection:(endColumn:1,endLineNumber:3,positionColumn:1,positionLineNumber:3,selectionStartColumn:1,selectionStartLineNumber:3,startColumn:1,startLineNumber:3),source:'%23include+%3Cstddef.h%3E%0A%23include+%3Cstdint.h%3E%0A%0Avoid+decode(const+unsigned+char+*m,%0A+++++++++++++++++++unsigned+char+*mdec,%0A+++++++++++++++++++const+int+mdeclen)+%7B%0A++++int+i%3B%0A++++for+(i+%3D+0%3B+i+%3C+mdeclen+/+2%3B+%2B%2Bi)+%7B%0A++++++++*mdec%2B%2B+%3D+m%5Bi%5D+%26+0xf%3B%0A++++++++*mdec%2B%2B+%3D+m%5Bi%5D+%3E%3E+4%3B%0A++++%7D%0A%0A++++if+(mdeclen+%25+2+%3D%3D+1)+%7B%0A++++++++*mdec%2B%2B+%3D+m%5Bi%5D+%26+0x0f%3B%0A++++%7D%0A%7D'),l:'5',n:'1',o:'C+source+%231',t:'0')),k:50,l:'4',n:'0',o:'',s:0,t:'0'),(g:!((h:compiler,i:(compiler:cclang1810,filters:(b:'0',binary:'1',binaryObject:'1',commentOnly:'0',debugCalls:'1',demangle:'0',directives:'0',execute:'1',intel:'0',libraryCode:'0',trim:'1',verboseDemangling:'0'),flagsViewOpen:'1',fontScale:14,fontUsePx:'0',j:1,lang:___c,libs:!(),options:'-mavx+-mavx2+-mbmi+-mbmi2+-O3',overrides:!(),selection:(endColumn:23,endLineNumber:103,positionColumn:23,positionLineNumber:103,selectionStartColumn:23,selectionStartLineNumber:103,startColumn:23,startLineNumber:103),source:1),l:'5',n:'0',o:'+x86-64+clang+18.1.0+(Editor+%231)',t:'0')),k:50,l:'4',n:'0',o:'',s:0,t:'0')),l:'2',n:'0',o:'',t:'0')),version:4
+    // const __m256i mask = _mm256_set1_epi8(0x0F);
+    // for (; (i+32) <= (mdeclen / 2); i+=32) {
+    //     const __m256i tmp = _mm256_loadu_si256((__m256i *)(m + i));
+    //     const __m256i a1 = tmp & mask;
+    //     const __m256i a2 = _mm256_srli_epi16(tmp, 4) & mask;
+
+    //     const __m256i b1 =_mm256_permute4x64_epi64(a1, 0b11011000);
+    //     const __m256i b2 =_mm256_permute4x64_epi64(a2, 0b11011000);
+
+    //     const __m256i c1 = _mm256_unpacklo_epi8(b1, b2);
+    //     const __m256i c2 = _mm256_unpackhi_epi8(b1, b2);
+
+    //     _mm256_storeu_si256((__m256i *)(mdec +  0), c1);
+    //     _mm256_storeu_si256((__m256i *)(mdec + 32), c2);
+    //     mdec += 64;
+    // }
+
+    for (; i < mdeclen / 2; ++i) {
         *mdec++ = m[i] & 0xf;
         *mdec++ = m[i] >> 4;
     }
@@ -30,8 +52,31 @@ static void decode(const unsigned char *m, unsigned char *mdec, int mdeclen) {
 }
 
 static void encode(const unsigned char *m, unsigned char *menc, int mlen) {
-    int i;
-    for (i = 0; i < mlen / 2; ++i, m += 2) {
+    int i = 0;
+
+    const __m256i mask = _mm256_set1_epi16(0x00FF);
+    for (; i+32 < mlen/2; ++i, m += 32) {
+        const __m256i v1 = _mm256_loadu_si256((__m256i *)(m + i));
+        const __m256i v2 = _mm256_srli_epi16(v1, 8);
+        const __m256i t = _mm256_packus_epi16(v1&mask,v2);
+        // const __m256i a = _mm256_shuffle_epi8(t, shuf);
+        // TODO here move everything into a 128bit register
+
+
+
+
+        const __m256i t1 = _mm256_packs_epi16(v1&mask,v2);
+
+
+        //  const __m256i b1 =_mm256_permute4x64_epi64(a1, 0b11011000);
+        //     const __m256i b2 =_mm256_permute4x64_epi64(a2, 0b11011000);
+
+        //     const __m256i c1 = _mm256_unpacklo_epi8(b1, b2);
+        //     const __m256i c2 = _mm256_unpackhi_epi8(b1, b2);
+        (void)t; (void)t1;
+    }
+
+    for (; i < mlen / 2; ++i, m += 2) {
         menc[i] = (*m) | (*(m + 1) << 4);
     }
 

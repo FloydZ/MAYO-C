@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <mayo.h>
 #include <immintrin.h>
-#include <arithmetic_common.h>
+#include "./arithmetic_common.h"
 
 // P1*0 -> P1: v x v, O: v x o
 static 
@@ -169,34 +169,65 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
     // TODO: buffer overflow
     const __m256i v1 = _mm256_loadu_si256((__m256i *)(V +  0));
     const __m256i v2 = _mm256_loadu_si256((__m256i *)(V + 32));
+    const __m256i v3 = _mm256_loadu_si256((__m256i *)(V + 64));
+    const __m256i v4 = _mm256_loadu_si256((__m256i *)(V + 96));
 
     const __m128i b_mask = _mm_set1_epi8(0x0F);
     // const uint32_t *v64 = (const uint32_t *)V;
     const __m128i *l128 = (const __m128i *)_L;
+    __m256i s1;
     uint16_t *acc16 = (uint16_t *)_acc;
+    const __m128i b_mask2 = _mm_set_epi64x(0x0000FFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF);
     for (size_t c = 0; c < O_MAX; c++) {
-        // code loads 32 fq elements (16 bytes)
-        const __m128i b0 = l128[c];
-        const __m128i b1 = b0 & b_mask;
-        const __m128i b2 = (b0 >> 4u) & b_mask;
+        {
+            // code loads 32 fq elements (16 bytes)
+            const __m128i b0 = l128[2 * c + 0];
+            const __m128i b1 = b0 & b_mask;
+            const __m128i b2 = (b0 >> 4u) & b_mask;
 
-        const __m256i c1 = _mm256_cvtepu8_epi16(b1);
-        const __m256i c2 = _mm256_cvtepu8_epi16(b2);
+            const __m256i c1 = _mm256_cvtepu8_epi16(b1);
+            const __m256i c2 = _mm256_cvtepu8_epi16(b2);
 
-        const __m256i d1 = _mm256_mullo_epi16(c1, mul_mask);
-        const __m256i d2 = _mm256_mullo_epi16(c2, mul_mask);
+            const __m256i d1 = _mm256_mullo_epi16(c1, mul_mask);
+            const __m256i d2 = _mm256_mullo_epi16(c2, mul_mask);
 
-        const __m256i e1 =_mm256_permute4x64_epi64(d1, 0b11011000);
-        const __m256i e2 =_mm256_permute4x64_epi64(d2, 0b11011000);
+            const __m256i e1 = _mm256_permute4x64_epi64(d1, 0b11011000);
+            const __m256i e2 = _mm256_permute4x64_epi64(d2, 0b11011000);
 
-        // f1 and f2, each contain 8 fq elements each placed in a 4 byte limb
-        const __m256i f1 = _mm256_unpacklo_epi16(e1, e2);
-        const __m256i f2 = _mm256_unpackhi_epi16(e1, e2);
+            // f1 and f2, each contain 8 fq elements each placed in a 4 byte limb
+            const __m256i f1 = _mm256_unpacklo_epi16(e1, e2);
+            const __m256i f2 = _mm256_unpackhi_epi16(e1, e2);
 
-        const __m256i g1 = mul_simd_u256(f1, v1);
-        const __m256i g2 = mul_simd_u256(f2, v2);
+            const __m256i g1 = mul_simd_u256(v1, f1);
+            const __m256i g2 = mul_simd_u256(v2, f2);
 
-        const __m256i s1 = g1 ^ g2;
+            s1 = g1 ^ g2;
+        }
+        {
+            // code loads 32 fq elements (16 bytes)
+            const __m128i b0 = l128[2*c + 1] & b_mask2;
+            const __m128i b1 = b0 & b_mask;
+            const __m128i b2 = (b0 >> 4u) & b_mask;
+
+            const __m256i c1 = _mm256_cvtepu8_epi16(b1);
+            const __m256i c2 = _mm256_cvtepu8_epi16(b2);
+
+            const __m256i d1 = _mm256_mullo_epi16(c1, mul_mask);
+            const __m256i d2 = _mm256_mullo_epi16(c2, mul_mask);
+
+            const __m256i e1 = _mm256_permute4x64_epi64(d1, 0b11011000);
+            const __m256i e2 = _mm256_permute4x64_epi64(d2, 0b11011000);
+
+            // f1 and f2, each contain 8 fq elements each placed in a 4 byte limb
+            const __m256i f1 = _mm256_unpacklo_epi16(e1, e2);
+            const __m256i f2 = _mm256_unpackhi_epi16(e1, e2);
+
+            const __m256i g1 = mul_simd_u256(v3, f1);
+            const __m256i g2 = mul_simd_u256(v4, f2);
+
+            s1 ^= g1 ^ g2;
+        }
+
         const __m256i s2 = gf16_hadd_avx2_16(s1);
         const uint16_t r = _mm256_extract_epi16(s2, 0);
 

@@ -14,7 +14,7 @@ endif()
 
 include(CTest)
 
-option(ENABLE_STRICT "Build with strict compile options." ON)
+option(ENABLE_STRICT "Build with strict compile options." OFF)
 
 if(ENABLE_STRICT)
    message("Enable strict flag ON")
@@ -23,7 +23,7 @@ endif()
 option(ENABLE_TESTS  "Enable compilation of tests." ON)
 option(ENABLE_CT_TESTING  "Enable compilation for constant time testing." OFF)
 option(SOURCE_PATH "Where the source code is stored, default in the building tree" OFF)
-#option(ENABLE_PARAMS_DYNAMIC "Enable dynamic use of MAYO parameters" OFF)
+option(ENABLE_PARAMS_DYNAMIC "Enable dynamic use of MAYO parameters" OFF)
 
 SET(MVARIANT_S "MAYO_1;MAYO_2;MAYO_3;MAYO_5")
 

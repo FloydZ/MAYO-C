@@ -16,6 +16,7 @@
 #define print_unit printf("cycles\n");
 #endif
 
+static int bench_mul(int runs, int csv);
 static int bench_sig(const mayo_params_t *p, int runs, int csv);
 static inline int64_t cpucycles(void);
 
@@ -45,7 +46,8 @@ int main(int argc, char *argv[]) {
         goto end;
     }
     int runs = atoi(argv[1]);
-    rc = bench_sig(0, runs, 0);
+    //rc = bench_sig(0, runs, 0);
+    rc = bench_mul(runs, 0);
 #endif
 
 
@@ -144,6 +146,32 @@ static int bench_sig(const mayo_params_t *p, int runs, int csv) {
     return rc;
 }
 
+#include "immintrin.h"
+#include "../src/AVX2/shuffle_arithmetic_64.h"
+static int bench_mul(int runs, int csv) {
+    uint8_t  *V = (uint8_t *)malloc(3096);
+    uint64_t *L = (uint64_t *)malloc(3096);
+    uint64_t *M = (uint64_t *)malloc(3096);
+    __m256i V_multabs[(K_MAX+1)/2*V_MAX];
+    uint8_t test[1000] = {0};
+
+    int i;
+
+    int64_t cycles, cycles1, cycles2;
+    int64_t cycles_list[10000];
+    mayo_V_multabs_avx2(V, V_multabs);
+
+    BENCH_CODE_1(runs);
+        mayo_12_Vt_times_L_avx2(L, V_multabs, M);
+    BENCH_CODE_2("Vt_times l", csv);
+
+
+
+    BENCH_CODE_1(runs);
+        mayo_12_Vt_times_L_avx2_v2(L, V, (uint64_t *)test);
+    BENCH_CODE_2("new Vt times L", csv);
+    return 0;
+}
 static inline int64_t cpucycles(void) {
 #if (defined(TARGET_AMD64) || defined(TARGET_X86))
     unsigned int hi, lo;

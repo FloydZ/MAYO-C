@@ -54,27 +54,27 @@ static void decode(const unsigned char *m, unsigned char *mdec, int mdeclen) {
 static void encode(const unsigned char *m, unsigned char *menc, int mlen) {
     int i = 0;
 
-    const __m256i mask = _mm256_set1_epi16(0x00FF);
-    for (; i+32 < mlen/2; ++i, m += 32) {
-        const __m256i v1 = _mm256_loadu_si256((__m256i *)(m + i));
-        const __m256i v2 = _mm256_srli_epi16(v1, 8);
-        const __m256i t = _mm256_packus_epi16(v1&mask,v2);
-        // const __m256i a = _mm256_shuffle_epi8(t, shuf);
-        // TODO here move everything into a 128bit register
+    //const __m256i mask = _mm256_set1_epi16(0x00FF);
+    //for (; i+32 < mlen/2; ++i, m += 32) {
+    //    const __m256i v1 = _mm256_loadu_si256((__m256i *)(m + i));
+    //    const __m256i v2 = _mm256_srli_epi16(v1, 8);
+    //    const __m256i t = _mm256_packus_epi16(v1&mask,v2);
+    //    // const __m256i a = _mm256_shuffle_epi8(t, shuf);
+    //    // TODO here move everything into a 128bit register
 
 
 
 
-        const __m256i t1 = _mm256_packs_epi16(v1&mask,v2);
+    //    const __m256i t1 = _mm256_packs_epi16(v1&mask,v2);
 
 
-        //  const __m256i b1 =_mm256_permute4x64_epi64(a1, 0b11011000);
-        //     const __m256i b2 =_mm256_permute4x64_epi64(a2, 0b11011000);
+    //    //  const __m256i b1 =_mm256_permute4x64_epi64(a1, 0b11011000);
+    //    //     const __m256i b2 =_mm256_permute4x64_epi64(a2, 0b11011000);
 
-        //     const __m256i c1 = _mm256_unpacklo_epi8(b1, b2);
-        //     const __m256i c2 = _mm256_unpackhi_epi8(b1, b2);
-        (void)t; (void)t1;
-    }
+    //    //     const __m256i c1 = _mm256_unpacklo_epi8(b1, b2);
+    //    //     const __m256i c2 = _mm256_unpackhi_epi8(b1, b2);
+    //    (void)t; (void)t1;
+    //}
 
     for (; i < mlen / 2; ++i, m += 2) {
         menc[i] = (*m) | (*(m + 1) << 4);

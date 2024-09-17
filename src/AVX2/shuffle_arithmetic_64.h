@@ -147,16 +147,23 @@ static inline __m256i gf16_hadd_avx2_64(const __m256i in) {
 }
 /// horizontal xor
 static inline __m256i gf16_hadd_avx2_32(const __m256i in) {
-    __m256i ret = _mm256_xor_si256(in, _mm256_srli_si256(in, 4));
+    __m256i ret = _mm256_xor_si256(in, _mm256_srli_epi64(in, 32));
     return gf16_hadd_avx2_64(ret);
 }
 /// horizontal xor
 static inline __m256i gf16_hadd_avx2_16(const __m256i in) {
-    __m256i ret = _mm256_xor_si256(in, _mm256_srli_si256(in, 2));
+    __m256i ret = _mm256_xor_si256(in, _mm256_srli_epi32(in, 16));
     return gf16_hadd_avx2_32(ret);
 }
 
+
+static void mul_matrix(uint8_t *C, const uint8_t *A, const uint8_t *B,
+         const uint32_t r, const uint32_t c1, const uint32_t c2) {
+
+}
+
 // only for Mayo2
+// L is a row major matrix
 static
 inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
                                        const uint8_t *V,
@@ -167,21 +174,32 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
     // const __m256i scatter_mask = _mm256_setr_epi32(0, oA, 2*oA, 3*oA, 4*oA, 5*oA, 6*oA, 7*oA);
 
     // TODO: buffer overflow
+    //__m256i v[8];
+    //const __m256i lmask = _mm256_setr_epi32(0,0,0,0,-1,-1,-1,-1);
+    //for (uint32_t i = 0; i < 7; ++i) {
+    //    v[i] = _mm256_loadu_si256((__m256i *)(V + i*32));
+    //}
+    //v[7] = _mm256_maskload_epi32((int *)(V + 7*32), lmask);
+
     const __m256i v1 = _mm256_loadu_si256((__m256i *)(V +  0));
     const __m256i v2 = _mm256_loadu_si256((__m256i *)(V + 32));
     const __m256i v3 = _mm256_loadu_si256((__m256i *)(V + 64));
     const __m256i v4 = _mm256_loadu_si256((__m256i *)(V + 96));
 
     const __m128i b_mask = _mm_set1_epi8(0x0F);
-    // const uint32_t *v64 = (const uint32_t *)V;
-    const __m128i *l128 = (const __m128i *)_L;
-    __m256i s1;
+    //const uint64_t b64_mask = 0x0F0F0F0F0F0F0F0F;
+    //const uint64_t *l64 = (const uint64_t *)_L;
+    //const __m128i *l128 = (const __m128i *)_L;
+    const uint8_t *l8 = (const uint8_t *)_L;
     uint16_t *acc16 = (uint16_t *)_acc;
+    //uint32_t *acc32 = (uint32_t *)_acc;
     const __m128i b_mask2 = _mm_set_epi64x(0x0000FFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF);
-    for (size_t c = 0; c < O_MAX; c++) {
+    __m256i s1;
+    for (uint32_t c = 0; c < O_MAX; c++) {
+        // this code is correct if V is packed
         {
             // code loads 32 fq elements (16 bytes)
-            const __m128i b0 = l128[2 * c + 0];
+            const __m128i b0 = *(const __m128i_u *)(l8 + c*V_BYTES_MAX);
             const __m128i b1 = b0 & b_mask;
             const __m128i b2 = (b0 >> 4u) & b_mask;
 
@@ -205,7 +223,7 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
         }
         {
             // code loads 32 fq elements (16 bytes)
-            const __m128i b0 = l128[2*c + 1] & b_mask2;
+            const __m128i b0 = (*(const __m128i_u *)(l8 + c*V_BYTES_MAX + 16)) & b_mask2;
             const __m128i b1 = b0 & b_mask;
             const __m128i b2 = (b0 >> 4u) & b_mask;
 
@@ -218,19 +236,19 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
             const __m256i e1 = _mm256_permute4x64_epi64(d1, 0b11011000);
             const __m256i e2 = _mm256_permute4x64_epi64(d2, 0b11011000);
 
-            // f1 and f2, each contain 8 fq elements each placed in a 4 byte limb
+            // f1 and f2, each contain up to 8 fq elements each placed in a 4 byte limb
             const __m256i f1 = _mm256_unpacklo_epi16(e1, e2);
             const __m256i f2 = _mm256_unpackhi_epi16(e1, e2);
 
             const __m256i g1 = mul_simd_u256(v3, f1);
             const __m256i g2 = mul_simd_u256(v4, f2);
 
-            s1 ^= g1 ^ g2;
+            const __m256i t = g1 ^ g2;
+            s1 ^= t;
         }
 
         const __m256i s2 = gf16_hadd_avx2_16(s1);
         const uint16_t r = _mm256_extract_epi16(s2, 0);
-
         acc16[c] ^= r;
 
         // code loads 32 fq elements (16 bytes)
@@ -257,8 +275,8 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
         //const __m256i s1 = g1 ^ g2;
         //const __m256i s2 = gf16_hadd_avx2_16(s1);
         //const uint16_t r = _mm256_extract_epi16(s2, 0);
-
         //acc16[c] ^= r;
+
 
         // code to load 16 fq elements (8 byte) into 2 avx registers
         // padded by 4 bytes each.
@@ -284,7 +302,42 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
         // (void)f1;
         // (void)f2;
 
-        // scatter load V (k=4 Mayo2)
+
+
+        //__m256i s1 = _mm256_setzero_si256();
+        //for (uint32_t i = 0; i < 4; ++i) {
+        //    // code to load 16 fq elements (8 byte) into 2 avx registers
+        //    // padded by 4 bytes each.
+        //    const uint64_t b0 = l64[c*4 + i];
+        //    const __m128i b1 = _mm_set1_epi64x(b0 & b64_mask);
+        //    const __m128i b2 = _mm_set1_epi64x((b0 >> 4u) & b64_mask);
+        //    // expand 8 fq elements to avx register (32 limbs)
+        //    const __m256i c1 = _mm256_cvtepu8_epi32(b1);
+        //    const __m256i c2 = _mm256_cvtepu8_epi32(b2);
+
+        //    // expand each 4 bit fq element into 8 fq elements within
+        //    // each 32 bit limb
+        //    const __m256i d1 = _mm256_mullo_epi32(c1, mul_mask);
+        //    const __m256i d2 = _mm256_mullo_epi32(c2, mul_mask);
+
+        //    // swap the second and third 64 bit limb
+        //    const __m256i e1 =_mm256_permute4x64_epi64(d1, 0b11011000);
+        //    const __m256i e2 =_mm256_permute4x64_epi64(d2, 0b11011000);
+
+        //    // f1 and f2, each contain 8 fq elements each placed in a 4 byte limb
+        //    const __m256i f1 = _mm256_unpacklo_epi32(e1, e2);
+        //    const __m256i f2 = _mm256_unpackhi_epi32(e1, e2);
+
+        //    const __m256i g1 = mul_simd_u256(f1, v[i*2 + 0]);
+        //    const __m256i g2 = mul_simd_u256(f2, v[i*2 + 1]);
+
+        //    s1 ^= g1 ^ g2;
+        //}
+
+        //const __m256i s2 = gf16_hadd_avx2_32(s1);
+        //const uint32_t r1 = _mm256_extract_epi32(s2, 0);
+        //const uint32_t r2 = r1 & b64_mask;
+        //acc32[c] ^= r2;
 
     }
 }

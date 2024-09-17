@@ -47,7 +47,7 @@ void P1P1t_times_O(const mayo_params_t* p, const uint64_t* P1P1t, const unsigned
 
 // Calculate M=V*L and Y=V*P1*V^T in Sign
 #define V_times_L__V_times_P1_times_Vt MAYO_NAMESPACE(V_times_L__V_times_P1_times_Vt)
-void V_times_L__V_times_P1_times_Vt(const mayo_params_t* p, const uint64_t* L, const unsigned char* V, uint64_t* M, const uint64_t* P1, uint64_t* Y);
+void V_times_L__V_times_P1_times_Vt(const mayo_params_t* p, const uint64_t* L, const unsigned char* V,  const unsigned char *V2, uint64_t* M, const uint64_t* P1, uint64_t* Y);
 
 // Sample solution in Sign
 #define sample_solution MAYO_NAMESPACE(sample_solution)

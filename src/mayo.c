@@ -85,6 +85,48 @@ static void encode(const unsigned char *m, unsigned char *menc, int mlen) {
     }
 }
 
+uint8_t matrix_get_entry(const uint8_t *matrix,
+                         const uint32_t n_cols,
+                         const uint32_t i,
+                         const uint32_t j) {
+    const uint32_t nbytes_row = (n_cols+1)/2;
+    const uint32_t pos = nbytes_row*i + (j >> 1);
+    if (j & 1) {
+        return matrix[pos] >> 4;
+    } else {
+        return matrix[pos] & 0x0f;
+    }
+}
+
+void matrix_set_entry(uint8_t *matrix,
+                      const uint32_t n_cols,
+                      const uint32_t i,
+                      const uint32_t j,
+                      const uint8_t scalar){
+    const uint32_t nbytes_row = (n_cols + 1)/2;
+    const uint32_t pos = nbytes_row*i + (j >> 1);
+    if (j & 1) {
+        matrix[pos] &= 0x0f;
+        matrix[pos] |= (scalar << 4);
+    } else {
+        matrix[pos] &= 0xf0;
+        matrix[pos] |= scalar;
+    }
+}
+
+//
+static void transpose(uint8_t *out,
+                      uint8_t *in,
+                      const uint32_t r,
+                      const uint32_t c) {
+    for (uint32_t i = 0; i < r; i++) {
+        for (uint32_t j = 0; j < c; j++) {
+            const uint8_t t = matrix_get_entry(in, c, i, j);
+            matrix_set_entry(out, r, j, i, t);
+        }
+    }
+}
+
 static void compute_rhs(const mayo_params_t *p, const uint64_t *_vPv, const unsigned char *t, unsigned char *y){
     #ifndef ENABLE_PARAMS_DYNAMIC
     (void) p;
@@ -306,7 +348,8 @@ int mayo_sign_signature(const mayo_params_t *p, unsigned char *sig,
     unsigned char y[M_MAX];                    // secret data
     unsigned char salt[SALT_BYTES_MAX];        // not secret data
     unsigned char V[K_MAX * V_BYTES_MAX + R_BYTES_MAX],
-             Vdec[N_MINUS_O_MAX * K_MAX];                 // secret data
+             Vdec[N_MINUS_O_MAX * K_MAX],                 // secret data
+               VT[N_MINUS_O_MAX * K_MAX] = {0};// TODO remove                 // secret data
     unsigned char A[M_MAX * (K_MAX * O_MAX + 1)];   // secret data
     unsigned char x[K_MAX * N_MAX];                       // not secret data
     unsigned char r[K_MAX * O_MAX + 1] = { 0 };           // secret data
@@ -399,10 +442,12 @@ int mayo_sign_signature(const mayo_params_t *p, unsigned char *sig,
                    param_n - param_o);
         }
 
+        transpose(VT, V, param_k, param_n - param_o);
+
         // compute all the V * L matrices.
         // compute all the V * P1 * V^T matrices.
         alignas (32) uint64_t Y[K_MAX * K_MAX * M_MAX / 16] = {0};
-        V_times_L__V_times_P1_times_Vt(p, L, Vdec, Mtmp, P1, Y);
+        V_times_L__V_times_P1_times_Vt(p, L, Vdec, VT, Mtmp, P1, Y);
 
         compute_rhs(p, Y, t, y);
         compute_A(p, Mtmp, A);

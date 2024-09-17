@@ -153,7 +153,6 @@ static int bench_mul(int runs, int csv) {
     uint64_t *L = (uint64_t *)malloc(3096);
     uint64_t *M = (uint64_t *)malloc(3096);
     __m256i V_multabs[(K_MAX+1)/2*V_MAX];
-    uint8_t test[1000] = {0};
 
     int i;
 
@@ -162,14 +161,16 @@ static int bench_mul(int runs, int csv) {
     mayo_V_multabs_avx2(V, V_multabs);
 
     BENCH_CODE_1(runs);
-        mayo_12_Vt_times_L_avx2(L, V_multabs, M);
+        for (int j = 0; j < 100; ++j) { mayo_12_Vt_times_L_avx2(L, V_multabs, M);}
     BENCH_CODE_2("Vt_times l", csv);
 
 
 
+
     BENCH_CODE_1(runs);
-        mayo_12_Vt_times_L_avx2_v2(L, V, (uint64_t *)test);
+        for (int j = 0; j < 100; ++j) { mayo_12_Vt_times_L_avx2_v2(L, V, M); }
     BENCH_CODE_2("new Vt times L", csv);
+    free(V); free(L); free(M);
     return 0;
 }
 static inline int64_t cpucycles(void) {

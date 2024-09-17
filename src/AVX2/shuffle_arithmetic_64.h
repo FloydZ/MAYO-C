@@ -7,6 +7,7 @@
 #include <mayo.h>
 #include <immintrin.h>
 #include "./arithmetic_common.h"
+#include "./arithmetic_64.h"
 
 // P1*0 -> P1: v x v, O: v x o
 static 
@@ -181,10 +182,10 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
     //}
     //v[7] = _mm256_maskload_epi32((int *)(V + 7*32), lmask);
 
-    const __m256i v1 = _mm256_loadu_si256((__m256i *)(V +  0));
-    const __m256i v2 = _mm256_loadu_si256((__m256i *)(V + 32));
-    const __m256i v3 = _mm256_loadu_si256((__m256i *)(V + 64));
-    const __m256i v4 = _mm256_loadu_si256((__m256i *)(V + 96));
+    // const __m256i v1 = _mm256_loadu_si256((__m256i *)(V +  0));
+    // const __m256i v2 = _mm256_loadu_si256((__m256i *)(V + 32));
+    // const __m256i v3 = _mm256_loadu_si256((__m256i *)(V + 64));
+    // const __m256i v4 = _mm256_loadu_si256((__m256i *)(V + 96));
 
     const __m128i b_mask = _mm_set1_epi8(0x0F);
     //const uint64_t b64_mask = 0x0F0F0F0F0F0F0F0F;
@@ -195,11 +196,16 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
     //uint32_t *acc32 = (uint32_t *)_acc;
     const __m128i b_mask2 = _mm_set_epi64x(0x0000FFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF);
     __m256i s1;
-    for (uint32_t c = 0; c < O_MAX; c++) {
+
+
+    // TODO 2. for loop is missing and the transposing of M;
+    for (uint32_t c = 0; c < V_MAX; c++) {
         // this code is correct if V is packed
+        const uint16_t v = *(uint16_t *) (V + K_MAX * c);
+        const __m256i v1 = _mm256_set1_epi16((short) v);
         {
             // code loads 32 fq elements (16 bytes)
-            const __m128i b0 = *(const __m128i_u *)(l8 + c*V_BYTES_MAX);
+            const __m128i b0 = *(const __m128i_u *) (l8 + c * O_MAX);
             const __m128i b1 = b0 & b_mask;
             const __m128i b2 = (b0 >> 4u) & b_mask;
 
@@ -217,39 +223,24 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
             const __m256i f2 = _mm256_unpackhi_epi16(e1, e2);
 
             const __m256i g1 = mul_simd_u256(v1, f1);
-            const __m256i g2 = mul_simd_u256(v2, f2);
+            const __m256i g2 = mul_simd_u256(v1, f2);
 
             s1 = g1 ^ g2;
         }
-        {
-            // code loads 32 fq elements (16 bytes)
-            const __m128i b0 = (*(const __m128i_u *)(l8 + c*V_BYTES_MAX + 16)) & b_mask2;
-            const __m128i b1 = b0 & b_mask;
-            const __m128i b2 = (b0 >> 4u) & b_mask;
-
-            const __m256i c1 = _mm256_cvtepu8_epi16(b1);
-            const __m256i c2 = _mm256_cvtepu8_epi16(b2);
-
-            const __m256i d1 = _mm256_mullo_epi16(c1, mul_mask);
-            const __m256i d2 = _mm256_mullo_epi16(c2, mul_mask);
-
-            const __m256i e1 = _mm256_permute4x64_epi64(d1, 0b11011000);
-            const __m256i e2 = _mm256_permute4x64_epi64(d2, 0b11011000);
-
-            // f1 and f2, each contain up to 8 fq elements each placed in a 4 byte limb
-            const __m256i f1 = _mm256_unpacklo_epi16(e1, e2);
-            const __m256i f2 = _mm256_unpackhi_epi16(e1, e2);
-
-            const __m256i g1 = mul_simd_u256(v3, f1);
-            const __m256i g2 = mul_simd_u256(v4, f2);
-
-            const __m256i t = g1 ^ g2;
-            s1 ^= t;
-        }
 
         const __m256i s2 = gf16_hadd_avx2_16(s1);
-        const uint16_t r = _mm256_extract_epi16(s2, 0);
+        uint16_t r = _mm256_extract_epi16(s2, 0);
+
+        // tail mngt
+        for (uint32_t i = 16; i < O_MAX; ++i) {
+            const uint8_t t1 = l8[c * O_MAX + i] & 0xF;
+            r ^= gf16v_mul_u64(v, t1);
+            const uint8_t t2 = l8[c * O_MAX + i] >> 4u;
+            r ^= gf16v_mul_u64(v, t2);
+        }
         acc16[c] ^= r;
+    }
+
 
         // code loads 32 fq elements (16 bytes)
         //const __m128i b0 = l128[c];
@@ -338,8 +329,6 @@ inline void mayo_12_Vt_times_L_avx2_v2(const uint64_t *_L,
         //const uint32_t r1 = _mm256_extract_epi32(s2, 0);
         //const uint32_t r2 = r1 & b64_mask;
         //acc32[c] ^= r2;
-
-    }
 }
 static
 inline void mayo_12_Vt_times_L_avx2(const uint64_t *_L, const __m256i *V_multabs, uint64_t *_acc){
